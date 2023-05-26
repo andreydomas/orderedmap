@@ -3,6 +3,7 @@ package orderedmap
 import (
 	"bytes"
 	"encoding/json"
+	"gopkg.in/yaml.v3"
 	"sort"
 )
 
@@ -259,4 +260,31 @@ func (o OrderedMap) MarshalJSON() ([]byte, error) {
 	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
+}
+
+func (o OrderedMap) MarshalYAML() (interface{}, error) {
+	node := yaml.Node{}
+	node.Kind = yaml.MappingNode
+	for _, k := range o.keys {
+		value := o.values[k]
+		var child yaml.Node
+		if om, isOrderedMap := value.(OrderedMap); isOrderedMap {
+			if out, err := om.MarshalYAML(); err != nil {
+				return nil, err
+			} else {
+				child = out.(yaml.Node)
+			}
+		} else {
+			child = yaml.Node{}
+			if err := child.Encode(&value); err != nil {
+				return nil, err
+			}
+		}
+		nameNode := yaml.Node{}
+		if err := nameNode.Encode(&k); err != nil {
+			return nil, err
+		}
+		node.Content = append(node.Content, &nameNode, &child)
+	}
+	return node, nil
 }
