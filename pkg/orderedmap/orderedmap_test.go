@@ -3,6 +3,8 @@ package orderedmap
 import (
 	"encoding/json"
 	"fmt"
+	"gopkg.in/yaml.v3"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -171,6 +173,58 @@ func TestMarshalJSON(t *testing.T) {
 		fmt.Println(ei)
 		fmt.Println(si)
 		t.Error("JSON MarshalIndent value is incorrect", si)
+	}
+}
+
+func TestMarshalYAML(t *testing.T) {
+	o := New()
+	// number
+	o.Set("number", 3)
+	// string
+	o.Set("string", "x")
+	// string
+	o.Set("specialstring", "\\.<>[]{}_-")
+	// new value keeps key in old position
+	o.Set("number", 4)
+	// keys not sorted alphabetically
+	o.Set("z", 1)
+	o.Set("a", 2)
+	o.Set("b", 3)
+	// slice
+	o.Set("slice", []interface{}{
+		"1",
+		1,
+	})
+	// orderedmap
+	v := New()
+	v.Set("e", 1)
+	v.Set("a", 2)
+	o.Set("orderedmap", v)
+	// escape key
+	o.Set("test\n\r\t\\\"ing", 9)
+	// convert to yaml
+	b, err := yaml.Marshal(o)
+	if err != nil {
+		t.Error("Marshalling yaml", err)
+	}
+	s := string(b)
+	// check yaml is correctly ordered
+	if s != `number: 4
+string: x
+specialstring: \.<>[]{}_-
+z: 1
+a: 2
+b: 3
+slice:
+    - "1"
+    - 1
+orderedmap:
+    e: 1
+    a: 2
+? "test\n\r\t\\\"ing"
+: 9
+` {
+		t.Error("YAML Marshal value is incorrect", s)
 	}
 }
 
@@ -511,7 +565,10 @@ func TestOrderedMap_SortKeys(t *testing.T) {
 }
 `
 	o := New()
-	json.Unmarshal([]byte(s), &o)
+	err := json.Unmarshal([]byte(s), &o)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	o.SortKeys(sort.Strings)
 
@@ -538,7 +595,10 @@ func TestOrderedMap_Sort(t *testing.T) {
 }
 `
 	o := New()
-	json.Unmarshal([]byte(s), &o)
+	err := json.Unmarshal([]byte(s), &o)
+	if err != nil {
+		t.Fatal(err)
+	}
 	o.Sort(func(a *Pair, b *Pair) bool {
 		return a.value.(float64) > b.value.(float64)
 	})
@@ -562,7 +622,10 @@ func TestOrderedMap_empty_array(t *testing.T) {
 	srcStr := `{"x":[]}`
 	src := []byte(srcStr)
 	om := New()
-	json.Unmarshal(src, om)
+	err := json.Unmarshal(src, om)
+	if err != nil {
+		t.Fatal(err)
+	}
 	bs, _ := json.Marshal(om)
 	marshalledStr := string(bs)
 	if marshalledStr != srcStr {
@@ -579,12 +642,66 @@ func TestOrderedMap_empty_map(t *testing.T) {
 	srcStr := `{"x":{}}`
 	src := []byte(srcStr)
 	om := New()
-	json.Unmarshal(src, om)
+	err := json.Unmarshal(src, om)
+	if err != nil {
+		t.Fatal(err)
+	}
 	bs, _ := json.Marshal(om)
 	marshalledStr := string(bs)
 	if marshalledStr != srcStr {
 		t.Error("Empty map does not serialise to json correctly")
 		t.Error("Expect", srcStr)
 		t.Error("Got", marshalledStr)
+	}
+}
+
+func TestToMap(t *testing.T) {
+	o := New()
+	// number
+	o.Set("number", 3)
+	// string
+	o.Set("string", "x")
+	// string
+	o.Set("specialstring", "\\.<>[]{}_-")
+	// new value keeps key in old position
+	o.Set("number", 4)
+	// keys not sorted alphabetically
+	o.Set("z", 1)
+	o.Set("a", 2)
+	o.Set("b", 3)
+	// slice
+	o.Set("slice", []interface{}{
+		"1",
+		1,
+	})
+	// orderedmap
+	v := New()
+	v.Set("e", 1)
+	v.Set("a", 2)
+	o.Set("orderedmap", v)
+
+	m := o.ToMap()
+
+	nestedOrderedmap, ok := m["orderedmap"]
+	if !ok {
+		t.Error("nested orderedmap absent")
+	}
+
+	nestedOrderedmapM := v.ToMap()
+	if !reflect.DeepEqual(nestedOrderedmapM, map[string]interface{}{"a": 2, "e": 1}) {
+		t.Error("nested orderedmap wrong value", nestedOrderedmapM)
+	}
+
+	if !reflect.DeepEqual(m, map[string]interface{}{
+		"number":        4,
+		"string":        "x",
+		"specialstring": "\\.<>[]{}_-",
+		"z":             1,
+		"a":             2,
+		"b":             3,
+		"slice":         []interface{}{"1", 1},
+		"orderedmap":    nestedOrderedmap,
+	}) {
+		t.Error("ToMap() returns wrong value", m)
 	}
 }

@@ -288,3 +288,14 @@ func (o OrderedMap) MarshalYAML() (interface{}, error) {
 	}
 	return node, nil
 }
+
+func (o *OrderedMap) ToMap() map[string]interface{} {
+	rv := make(map[string]interface{})
+	for k, v := range o.values {
+		if om, isOrderedMap := v.(OrderedMap); isOrderedMap {
+			v = om.ToMap()
+		}
+		rv[k] = v
+	}
+	return rv
+}
